@@ -1,3 +1,3 @@
-module github.com/sf1/go-card
+module github.com/spilikin/go-card
 
-go 1.12
+go 1.22
