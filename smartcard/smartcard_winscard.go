@@ -213,7 +213,7 @@ func (c *Card) ATR() ATR {
 
 // Trasmit bytes to card and return response.
 func (c *Card) Transmit(command []byte) ([]byte, error) {
-	response := make([]byte, 258)
+	response := make([]byte, 4048)
 	received, err := c.context.winscard.Transmit(c.cardID, c.sendPCI,
 		command, response)
 	if err != nil {

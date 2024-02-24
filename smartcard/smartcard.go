@@ -120,16 +120,7 @@ func (cmd CommandAPDU) IsValid() bool {
 	if cmdLen < 4 {
 		return false
 	}
-	if cmdLen == 4 || cmdLen == 5 {
-		return true
-	}
-	lc := cmd[4]
-	if lc > cmdLen-5 {
-		return false
-	}
-	if cmdLen-5 > lc+1 {
-		return false
-	}
+	// TODO: add more sophisticated checks, esp. for extended length APDUs
 	return true
 }
 
