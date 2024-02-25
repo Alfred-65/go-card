@@ -63,72 +63,8 @@ func (c *Card) TransmitAPDU(cmd CommandAPDU) (ResponseAPDU, error) {
 // ISO7816-4 command APDU.
 type CommandAPDU []byte
 
-// Create command APDU with CLA, INS, P1, P2 as specified.
-// No command data, no response required.
-func Command1(cla, ins, p1, p2 byte) CommandAPDU {
-	var cmd CommandAPDU = make([]byte, 4)
-	cmd[0] = cla
-	cmd[1] = ins
-	cmd[2] = p1
-	cmd[3] = p2
-	return cmd
-}
-
-// Create command APDU with CLA, INS, P1, P2 as specified.
-// Response of length Le required.
-func Command2(cla, ins, p1, p2, le byte) CommandAPDU {
-	var cmd CommandAPDU = make([]byte, 5)
-	cmd[0] = cla
-	cmd[1] = ins
-	cmd[2] = p1
-	cmd[3] = p2
-	cmd[4] = le
-	return cmd
-}
-
-// Create command APDU with CLA, INS, P1, P2 and data as specified.
-// No response required.
-func Command3(cla, ins, p1, p2 byte, data []byte) CommandAPDU {
-	var cmd CommandAPDU = make([]byte, 5+len(data))
-	cmd[0] = cla
-	cmd[1] = ins
-	cmd[2] = p1
-	cmd[3] = p2
-	cmd[4] = byte(len(data))
-	for idx, b := range data {
-		cmd[5+idx] = b
-	}
-	return cmd
-}
-
-// Create command APDU with CLA, INS, P1, P2 and data as specified.
-// Response of length Le required.
-func Command4(cla, ins, p1, p2 byte, data []byte, le byte) CommandAPDU {
-	cmd := Command3(cla, ins, p1, p2, data)
-	cmd = append(cmd, le)
-	return cmd
-}
-
-// Create ISO7816-4 SELECT FILE APDU.
-func SelectCommand(aid ...byte) CommandAPDU {
-	return Command3(0x00, 0xa4, 0x04, 0x00, aid)
-}
-
-// Check if command APDU is valid
-func (cmd CommandAPDU) IsValid() bool {
-	cmdLen := byte(len(cmd))
-	if cmdLen < 4 {
-		return false
-	}
-	// TODO: add more sophisticated checks, esp. for extended length APDUs
-	return true
-}
-
 // Return string form of APDU.
 func (cmd CommandAPDU) String() string {
-	if !cmd.IsValid() {
-		return "Invalid APDU"
-	}
 	apdu := ([]byte)(cmd)
 	buffer := new(bytes.Buffer)
 	buffer.WriteString(fmt.Sprintf("%02X %02X %02X %02X", apdu[0], apdu[1],

@@ -1,138 +1,54 @@
 package main
 
 import (
-	"bufio"
-	"encoding/hex"
-	"flag"
-	"fmt"
-	"os"
-	"strings"
+	"log"
+	"log/slog"
 
 	"github.com/spilikin/go-card/smartcard"
 )
 
 func main() {
-	var script, aid string
-	flag.StringVar(&script, "script", "", "script")
-	flag.StringVar(&aid, "aid", "", "applet id")
-	flag.Usage = func() {
-		fmt.Println("\nusage: apdu [ -aid <aid> -script <file> ]\n")
-	}
-	flag.Parse()
-	err := run(aid, script)
-	if err != nil {
-		fmt.Printf("\nerror: %s\n\n", err)
-		os.Exit(1)
-	}
-}
-
-func run(aid, script string) error {
-	var reader *smartcard.Reader
 	ctx, err := smartcard.EstablishContext()
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
 	defer ctx.Release()
-	readers, err := ctx.ListReadersWithCard()
+
+	reader, err := ctx.WaitForCardPresent()
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	if len(readers) == 0 {
-		fmt.Println("\nplease insert smart card\n")
-		return nil
-	}
-	if len(readers) == 1 {
-		reader = readers[0]
-	} else {
-		// to do: handle multiple readers choices
-		return fmt.Errorf("multiple readers not supported")
-	}
+	slog.Info("Reader created", "reader", reader.Name())
+
 	card, err := reader.Connect()
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
+
 	defer card.Disconnect()
-	if aid != "" {
-		fmt.Println("")
-		err = processCommand(card, "select "+aid, true)
-		if err != nil {
-			return err
-		}
-	}
-	if script == "" {
-		return runInteractive(card)
-	}
-	return runScript(card, script)
-}
 
-func runInteractive(card *smartcard.Card) error {
-	scanner := bufio.NewScanner(os.Stdin)
-	for {
-		fmt.Print("\n>> ")
-		scanner.Scan()
-		command := scanner.Text()
-		if command == "" {
-			break
-		}
-		err := processCommand(card, command, false)
-		if err != nil {
-			fmt.Printf("error: %s\n", err)
-			continue
-		}
-	}
-	fmt.Println("")
-	return nil
-}
+	slog.Info("Card connected", "atr", card.ATR().String())
 
-func runScript(card *smartcard.Card, script string) error {
-	file, err := os.Open(script)
+	efv, err := card.EFVersion2()
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		fmt.Println("")
-		err := processCommand(card, scanner.Text(), true)
-		if err != nil {
-			fmt.Printf("error: %s\n", err)
-			continue
-		}
-	}
-	fmt.Println("")
-	return nil
-}
+	slog.Info("EF Version 2", "efv", efv)
 
-func processCommand(card *smartcard.Card, command string, echoCmd bool) error {
-	apdu := make([]byte, 0, 128)
-	parts := strings.Split(command, " ")
-	isSelect := false
-	if strings.ToLower(parts[0]) == "select" {
-		isSelect = true
-		parts = parts[1:]
-		apdu = append(apdu, 0x00, 0xa4, 0x04, 0x00, 0x00)
-	}
-	for _, p := range parts {
-		bytes, err := hex.DecodeString(p)
-		if err != nil {
-			return err
-		}
-		apdu = append(apdu, bytes...)
-	}
-	if isSelect {
-		if len(apdu) == 5 {
-			return fmt.Errorf("no aid provided")
-		}
-		apdu[4] = byte(len(apdu) - 5)
-	}
-	cmd := smartcard.CommandAPDU(apdu)
-	if echoCmd {
-		fmt.Printf(">> %s\n", cmd)
-	}
-	res, err := card.TransmitAPDU(cmd)
+	efdir, err := card.EFDIR()
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	fmt.Printf("<< %s\n", res)
-	return nil
+	slog.Info("EF.DIR", "EF.DIR", efdir)
+
+	err = card.SelectDF(smartcard.DF_ESIGN)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	cert, err := card.ReadCertificate(smartcard.EF_C_CH_AUT_E256)
+	if err != nil {
+		log.Fatal(err)
+	}
+	slog.Info("EF.C.CH.AUT.E256", "subject", cert.Subject.CommonName, "notAfter", cert.NotAfter)
 }
